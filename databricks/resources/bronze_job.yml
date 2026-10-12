@@ -1,18 +1,16 @@
-# Runs the bronze pipeline whenever new files land in the landing Volume.
-# Auto Loader's checkpoint means each run only ingests files it hasn't seen.
+# Runs the bronze pipeline every 15 minutes.
+# The app lands a file every 2 minutes; each run ingests all files that arrived
+# since the last one, because Auto Loader's checkpoint remembers what it has seen.
+# A pipeline has no schedule of its own in a bundle: schedules belong to jobs.
 resources:
   jobs:
-    rail_pulse_bronze_on_arrival:
-      name: rail_pulse_bronze_on_arrival
+    rail_pulse_bronze_every_15m:
+      name: rail_pulse_bronze_every_15m
       max_concurrent_runs: 1
-      queue:
-        enabled: true          # if files land during a run, queue one follow-up run
-      trigger:
-        pause_status: UNPAUSED   # dev mode pauses triggers unless set per job
-        file_arrival:
-          url: /Volumes/${var.catalog}/bronze/landing/rtt/bmh/
-          min_time_between_triggers_seconds: 900   # at most one run per 15 min
-          wait_after_last_change_seconds: 60
+      schedule:
+        quartz_cron_expression: "0 0/15 * * * ?"   # second minute hour day month weekday
+        timezone_id: UTC
+        pause_status: UNPAUSED   # development mode pauses schedules unless set per job
       tasks:
         - task_key: refresh_bronze
           pipeline_task:
