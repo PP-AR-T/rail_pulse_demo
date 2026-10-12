@@ -14,5 +14,7 @@ variables:
 targets:
   dev:
     mode: development   # prefixes resource names with your user, safe to redeploy
+    presets:
+      pipelines_development: false
     default: true
     # workspace host comes from your CLI login (databricks auth login --host ...)
