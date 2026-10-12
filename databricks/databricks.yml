@@ -16,5 +16,6 @@ targets:
     mode: development   # prefixes resource names with your user, safe to redeploy
     presets:
       pipelines_development: false
+      trigger_pause_status: UNPAUSED   # development mode pauses triggers by default
     default: true
     # workspace host comes from your CLI login (databricks auth login --host ...)

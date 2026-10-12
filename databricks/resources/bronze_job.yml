@@ -1,0 +1,18 @@
+# Runs the bronze pipeline whenever new files land in the landing Volume.
+# Auto Loader's checkpoint means each run only ingests files it hasn't seen.
+resources:
+  jobs:
+    rail_pulse_bronze_on_arrival:
+      name: rail_pulse_bronze_on_arrival
+      max_concurrent_runs: 1
+      queue:
+        enabled: true          # if files land during a run, queue one follow-up run
+      trigger:
+        file_arrival:
+          url: /Volumes/${var.catalog}/bronze/landing/rtt/bmh/
+          min_time_between_triggers_seconds: 60
+          wait_after_last_change_seconds: 30
+      tasks:
+        - task_key: refresh_bronze
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.rail_pulse_bronze.id}
