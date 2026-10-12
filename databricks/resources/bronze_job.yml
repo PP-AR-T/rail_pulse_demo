@@ -8,6 +8,7 @@ resources:
       queue:
         enabled: true          # if files land during a run, queue one follow-up run
       trigger:
+        pause_status: UNPAUSED   # dev mode pauses triggers unless set per job
         file_arrival:
           url: /Volumes/${var.catalog}/bronze/landing/rtt/bmh/
           min_time_between_triggers_seconds: 60
