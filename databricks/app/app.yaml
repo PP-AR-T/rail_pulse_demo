@@ -1,0 +1,6 @@
+command: ["streamlit", "run", "app.py"]
+env:
+  - name: BASE_URL
+    value: "REPLACE_WITH_API_BASE_URL"
+  - name: TOKEN
+    valueFrom: "api-token"
