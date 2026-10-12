@@ -6,6 +6,7 @@ resources:
       catalog: ${var.catalog}
       schema: bronze
       serverless: true
+      continuous: true
       configuration:
         landing_path: /Volumes/${var.catalog}/bronze/landing/rtt/bmh
       libraries:
