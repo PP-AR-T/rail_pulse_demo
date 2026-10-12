@@ -4,3 +4,5 @@ env:
     value: "https://data.rtt.io"
   - name: TOKEN
     valueFrom: "api-token"
+  - name: LANDING_DIR
+    value: "/Volumes/rail_pulse/bronze/landing/rtt/bmh"

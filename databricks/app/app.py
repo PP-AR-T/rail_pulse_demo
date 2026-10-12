@@ -1,66 +1,47 @@
 import json
-import os
+import threading
 
-import requests
+import poller
 import streamlit as st
 
-BASE_URL = os.environ.get("BASE_URL", "").rstrip("/")
-REFRESH_TOKEN = os.environ.get("TOKEN", "")
-
-st.title("rail-pulse-poller: RTT explorer")
+st.set_page_config(page_title="rail-pulse-poller")
+st.title("rail-pulse-poller")
 st.caption("Data: Realtime Trains (realtimetrains.co.uk). Personal, non-commercial use.")
-st.write("BASE_URL set:", bool(BASE_URL), "| TOKEN set:", bool(REFRESH_TOKEN))
-
-code = st.text_input("Station code", "BMH")
-filter_to = st.text_input("Only trains calling at (optional)", "WAT")
-window = st.number_input("Window (minutes)", 10, 180, 60)
 
 
-def rate_headers(r):
-    return {k: v for k, v in r.headers.items()
-            if k.lower().startswith("x-ratelimit") or k.lower() == "retry-after"}
+@st.cache_resource
+def start_poller():
+    """Start the polling thread once per app process."""
+    status = {"files_written": 0}
+    cache = poller.TokenCache(poller.BASE_URL, poller.REFRESH_TOKEN)
+    thread = threading.Thread(
+        target=poller.run_forever,
+        args=(threading.Event(), status, cache, poller.VolumeWriter()),
+        daemon=True,
+    )
+    thread.start()
+    return status
 
 
-if st.button("Get access token and fetch departures"):
-    out = {}
+try:
+    status = start_poller()
+except Exception as e:
+    st.error(f"Poller did not start: {e!r}")
+    st.stop()
+
+st.write(f"Polling {poller.STATION} every {poller.INTERVAL_S} s into `{poller.LANDING_DIR}`")
+st.button("Refresh view (does not call the API)")
+st.write("Last call (UTC):", status.get("last_call"))
+st.write("Last HTTP status:", status.get("last_status"))
+st.write("Files written since start:", status.get("files_written"))
+st.write("Last file:", status.get("last_path"))
+if status.get("last_error"):
+    st.error(status["last_error"])
+
+body = status.get("last_body")
+if body:
     try:
-        t = requests.get(f"{BASE_URL}/api/get_access_token",
-                         headers={"Authorization": f"Bearer {REFRESH_TOKEN}"}, timeout=20)
-        out["token_status"] = t.status_code
-        if t.status_code == 200:
-            info = t.json()
-            out["valid_until"] = info.get("validUntil")
-            params = {"code": code, "timeWindow": int(window)}
-            if filter_to:
-                params["filterTo"] = filter_to
-            r = requests.get(f"{BASE_URL}/gb-nr/location", params=params,
-                             headers={"Authorization": f"Bearer {info['token']}"}, timeout=20)
-            out.update(status=r.status_code, rate=rate_headers(r), text=r.text)
-        else:
-            out["text"] = t.text[:500]
-    except requests.RequestException as e:
-        out["error"] = repr(e)
-    st.session_state["last"] = out
-
-last = st.session_state.get("last")
-if last:
-    st.write("Token exchange status:", last.get("token_status"),
-             "| valid until:", last.get("valid_until"))
-    if "error" in last:
-        st.error(last["error"])
-    st.write("Location status:", last.get("status"))
-    if last.get("rate"):
-        st.json(last["rate"], expanded=False)
-    text = last.get("text", "")
-    try:
-        data = json.loads(text) if text else None
+        st.subheader("Latest response (expand to explore)")
+        st.json(json.loads(body), expanded=1)
     except json.JSONDecodeError:
-        data = None
-    if data is not None:
-        st.write("Services returned:", len(data.get("services", [])))
-        st.subheader("Response (click to expand)")
-        st.json(data, expanded=2)
-        st.download_button("Download raw JSON", text, file_name=f"rtt_{code}.json",
-                           mime="application/json")
-    elif text:
-        st.code(text[:1500])
+        st.code(body[:1500])
