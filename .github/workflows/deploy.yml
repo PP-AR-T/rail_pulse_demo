@@ -28,7 +28,7 @@ concurrency:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     environment: dev   # holds the variables and the secret below
     env:
       DATABRICKS_AUTH_TYPE: oauth-m2m
@@ -39,7 +39,7 @@ jobs:
       run:
         working-directory: databricks
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: databricks/setup-cli@main
       - name: Who am I (proves the service principal login worked)
         run: databricks current-user me
