@@ -1,0 +1,18 @@
+# Databricks Asset Bundle: the deployable definition of the Rail Pulse pipeline.
+# Run bundle commands from this folder (databricks/).
+bundle:
+  name: rail_pulse
+
+include:
+  - resources/*.yml
+
+variables:
+  catalog:
+    description: Unity Catalog catalog that holds the rail_pulse schemas
+    default: rail_pulse
+
+targets:
+  dev:
+    mode: development   # prefixes resource names with your user, safe to redeploy
+    default: true
+    # workspace host comes from your CLI login (databricks auth login --host ...)

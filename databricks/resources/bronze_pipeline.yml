@@ -1,0 +1,13 @@
+# The declarative pipeline: Auto Loader from the landing Volume into a bronze table.
+resources:
+  pipelines:
+    rail_pulse_bronze:
+      name: rail_pulse_bronze
+      catalog: ${var.catalog}
+      schema: bronze
+      serverless: true
+      configuration:
+        landing_path: /Volumes/${var.catalog}/bronze/landing/rtt/bmh
+      libraries:
+        - file:
+            path: ../pipelines/bronze_raw_events.py
