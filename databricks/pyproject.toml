@@ -1,0 +1,16 @@
+# Tooling config only (lint and tests). The deployable definition is databricks.yml.
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+builtins = ["dbutils", "spark", "display"]   # provided by Databricks notebooks
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[tool.ruff.lint.per-file-ignores]
+# Databricks notebooks put imports in later cells, which is normal there.
+"notebooks/*" = ["E402"]

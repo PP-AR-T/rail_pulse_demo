@@ -1,0 +1,49 @@
+name: deploy-bundle
+
+# Releases the Databricks bundle only when something the bundle uses changes.
+# The app (databricks/app) and notebooks are not part of the bundle,
+# so changes there do not trigger a deploy.
+#
+# Auth: OAuth M2M with a Databricks service principal (sp-github-deploy).
+# Free Edition has no account-level federation, so the client secret lives in
+# the GitHub 'dev' environment. Production would use OIDC federation instead
+# (DATABRICKS_AUTH_TYPE=github-oidc, permissions: id-token: write), which
+# stores no secret at all.
+on:
+  push:
+    branches: [main]
+    paths:
+      - databricks/databricks.yml
+      - databricks/resources/**
+      - databricks/pipelines/**
+      - .github/workflows/deploy.yml
+  workflow_dispatch:   # manual "Run workflow" button
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: dev   # holds the variables and the secret below
+    env:
+      DATABRICKS_AUTH_TYPE: oauth-m2m
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST }}
+      DATABRICKS_CLIENT_ID: ${{ vars.DATABRICKS_CLIENT_ID }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_CLIENT_SECRET }}
+    defaults:
+      run:
+        working-directory: databricks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+      - name: Who am I (proves the service principal login worked)
+        run: databricks current-user me
+      - name: Validate
+        run: databricks bundle validate -t dev
+      - name: Deploy bundle to dev
+        run: databricks bundle deploy -t dev

@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: databricks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install tools
+        run: pip install ruff pytest requests
+      - name: Lint
+        run: ruff check .
+      - name: Unit tests
+        run: pytest
+
+  validate:
+    needs: test
+    runs-on: ubuntu-latest
+    env:
+      DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      HAS_DATABRICKS: ${{ secrets.DATABRICKS_TOKEN != '' }}
+    defaults:
+      run:
+        working-directory: databricks
+    steps:
+      - uses: actions/checkout@v4
+      - uses: databricks/setup-cli@main
+        if: env.HAS_DATABRICKS == 'true'
+      - name: Validate bundle
+        if: env.HAS_DATABRICKS == 'true'
+        run: databricks bundle validate -t dev
+      - name: Skipped (no Databricks secrets set)
+        if: env.HAS_DATABRICKS != 'true'
+        run: echo "Add DATABRICKS_HOST and DATABRICKS_TOKEN as repository secrets to validate."
