@@ -1,6 +1,6 @@
 command: ["streamlit", "run", "app.py"]
 env:
   - name: BASE_URL
-    value: "REPLACE_WITH_API_BASE_URL"
+    value: "https://data.rtt.io"
   - name: TOKEN
     valueFrom: "api-token"
