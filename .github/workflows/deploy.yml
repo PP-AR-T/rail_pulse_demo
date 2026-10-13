@@ -1,8 +1,9 @@
 name: deploy-bundle
 
 # Releases the Databricks bundle only when something the bundle uses changes.
-# The app (databricks/app) and notebooks are not part of the bundle,
-# so changes there do not trigger a deploy.
+# The app (databricks/app) is not part of the bundle, so changes there do not trigger a deploy.
+# The sensor demo job runs two notebooks and the pipeline imports accelerator/ and reads
+# domain_packs/, so those paths do.
 #
 # Auth: OAuth M2M with a Databricks service principal (sp-github-deploy).
 # Free Edition has no account-level federation, so the client secret lives in
@@ -16,6 +17,10 @@ on:
       - databricks/databricks.yml
       - databricks/resources/**
       - databricks/pipelines/**
+      - databricks/accelerator/**
+      - databricks/domain_packs/**
+      - databricks/notebooks/sensor_simulator.py
+      - databricks/notebooks/incident_cards.py
       - .github/workflows/deploy.yml
   workflow_dispatch:   # manual "Run workflow" button
 

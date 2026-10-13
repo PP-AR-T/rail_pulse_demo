@@ -1,0 +1,30 @@
+# One-click demo: simulate a domain's sensors, stream them through the pipeline, draft cards.
+# No schedule on purpose: every run generates millions of readings, so you start it when you
+# want it (Jobs -> rail_pulse_sensor_demo -> Run now, or "Run now with different parameters"
+# to change pack, scale or minutes). Job parameters reach each notebook as widget values.
+resources:
+  jobs:
+    rail_pulse_sensor_demo:
+      name: rail_pulse_sensor_demo
+      max_concurrent_runs: 1
+      parameters:
+        - {name: catalog, default: "${var.catalog}"}
+        - {name: pack, default: rail}
+        - {name: scale, default: "1"}
+        - {name: minutes, default: "60"}
+        - {name: batch_minutes, default: "5"}
+        - {name: pause_s, default: "0"}
+        - {name: backend, default: databricks}
+        - {name: max_cards, default: "6"}
+      tasks:
+        - task_key: simulate_sensors
+          notebook_task:
+            notebook_path: ../notebooks/sensor_simulator.py
+        - task_key: stream_to_incidents
+          depends_on: [{task_key: simulate_sensors}]
+          pipeline_task:
+            pipeline_id: ${resources.pipelines.rail_pulse_sensors.id}
+        - task_key: draft_incident_cards
+          depends_on: [{task_key: stream_to_incidents}]
+          notebook_task:
+            notebook_path: ../notebooks/incident_cards.py

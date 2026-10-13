@@ -1,0 +1,176 @@
+# Domain pack: rail (Bournemouth–Waterloo corridor, fixed trackside assets).
+#
+# A domain pack is the ONLY domain-specific part of the accelerator. The core reads it to:
+#   1. simulate sensors (sites, asset_types, scenarios)       -> notebooks/sensor_simulator.py
+#   2. detect anomalies (detectors)                           -> pipelines/sensor_streaming.py
+#   3. ground the agent (causes, actions, knowledge, agent)   -> notebooks/incident_cards.py
+#
+# ALL DATA PRODUCED FROM THIS PACK IS SYNTHETIC. Nominal values and thresholds are illustrative
+# for a demo; they are not Network Rail standards and must not be used operationally.
+
+pack: rail
+title: Rail Pulse — trackside condition monitoring (synthetic)
+
+sites:
+  - {id: BMH, name: Bournemouth}
+  - {id: BCU, name: Brockenhurst}
+  - {id: SOU, name: Southampton Central}
+  - {id: WIN, name: Winchester}
+  - {id: BSK, name: Basingstoke}
+  - {id: WOK, name: Woking}
+  - {id: CLJ, name: Clapham Junction}
+  - {id: WAT, name: London Waterloo}
+
+# per_site is multiplied by the simulator's `scale` parameter to raise volume.
+# An optional `sites: [...]` list limits an asset type to those sites (default: every site).
+# period_s is how often each sensor reports. nominal/noise define healthy behaviour.
+asset_types:
+  point_machine:
+    label: Point machine
+    id_prefix: PM
+    per_site: 12
+    measures:
+      throw_time_s:    {unit: s, period_s: 30, nominal: 3.4, noise: 0.08}
+      drive_current_a: {unit: A, period_s: 30, nominal: 2.6, noise: 0.06}
+  track_circuit:
+    label: Track circuit
+    id_prefix: TC
+    per_site: 40
+    measures:
+      relay_voltage_v: {unit: V, period_s: 1, nominal: 1.20, noise: 0.02}
+      feed_current_a:  {unit: A, period_s: 1, nominal: 0.45, noise: 0.01}
+  traction_substation:
+    label: Traction substation (750 V DC third rail)
+    id_prefix: SS
+    per_site: 1
+    measures:
+      dc_bus_voltage_v: {unit: V, period_s: 1, nominal: 750, noise: 5}
+      load_current_a:   {unit: A, period_s: 1, nominal: 1800, noise: 120}
+  rail_temperature:
+    label: Rail temperature probe
+    id_prefix: RT
+    per_site: 2
+    measures:
+      rail_temp_c: {unit: degC, period_s: 60, nominal: 14, noise: 0.3}
+
+# The agent may only name one of these causes (or "unknown").
+causes:
+  - {id: points_mechanical_wear, label: "Point machine mechanical wear or obstruction (slide chairs, debris, adjustment)"}
+  - {id: signalling_power_supply_fault, label: "Signalling power supply fault affecting several track circuits at one location"}
+  - {id: track_circuit_intermittent, label: "Intermittent track circuit (bonding, insulated rail joint, ballast conditions)"}
+  - {id: traction_supply_fault, label: "Traction power supply degradation at a substation"}
+  - {id: rail_temperature_high, label: "High rail temperature approaching heat-restriction thresholds"}
+  - {id: sensor_fault, label: "Monitoring sensor or telemetry fault, not an asset fault"}
+
+# The agent may only recommend one of these. Advisory only: a human decides.
+actions:
+  - {id: monitor, label: "Keep monitoring; no intervention yet"}
+  - {id: dispatch_points_fitter, label: "Ask maintenance control to dispatch a points fitter"}
+  - {id: dispatch_signalling_technician, label: "Ask maintenance control to dispatch a signalling technician"}
+  - {id: alert_electrical_control, label: "Alert electrical control room about the traction supply"}
+  - {id: consider_heat_watch, label: "Consider heat watch / speed restriction per local hot-weather plan"}
+  - {id: raise_telemetry_fault, label: "Raise a telemetry fault ticket; treat readings as unreliable"}
+
+# Rules over 1-minute aggregates. Allowed columns: n, avg_value, min_value, max_value, std_value.
+# measure "*" applies to every measure.
+detectors:
+  - {id: points_slow_throw, measure: throw_time_s, when: "max_value > 4.2", severity: warning,
+     meaning: "Point machine throw time above 4.2 s (healthy around 3.4 s)"}
+  - {id: points_very_slow_throw, measure: throw_time_s, when: "max_value > 5.0", severity: critical,
+     meaning: "Point machine throw time above 5.0 s; failure to detect is likely soon"}
+  - {id: points_high_current, measure: drive_current_a, when: "max_value > 3.2", severity: warning,
+     meaning: "Point machine drive current high; the motor is working harder than normal"}
+  - {id: tc_low_voltage, measure: relay_voltage_v, when: "min_value < 0.9", severity: warning,
+     meaning: "Track circuit relay voltage low; margin to drop-away is shrinking"}
+  - {id: tc_drop_away, measure: relay_voltage_v, when: "min_value < 0.6", severity: critical,
+     meaning: "Track circuit relay voltage at drop-away level; likely showing false occupancy (TCF)"}
+  - {id: tc_flicker, measure: relay_voltage_v, when: "std_value > 0.12", severity: warning,
+     meaning: "Track circuit relay voltage unstable within the minute (intermittent)"}
+  - {id: traction_voltage_sag, measure: dc_bus_voltage_v, when: "min_value < 650", severity: warning,
+     meaning: "Substation DC bus voltage below 650 V"}
+  - {id: traction_voltage_low, measure: dc_bus_voltage_v, when: "min_value < 600", severity: critical,
+     meaning: "Substation DC bus voltage below 600 V; train performance will be affected"}
+  - {id: traction_overload, measure: load_current_a, when: "max_value > 3500", severity: warning,
+     meaning: "Substation load current well above normal"}
+  - {id: rail_temp_high, measure: rail_temp_c, when: "max_value > 40", severity: warning,
+     meaning: "Rail temperature above 40 C"}
+  - {id: sensor_flatline, measure: "*", when: "n >= 20 AND std_value < 0.000001", severity: info,
+     meaning: "Sensor reporting an identical value for a whole minute (stuck sensor or telemetry)"}
+
+# Planted faults. Times are minutes from the start of a simulator run; each run replays them.
+# `cause` is the ground truth, written to sim_fault_manifest and used only for scoring.
+scenarios:
+  - id: sou_points_degradation
+    cause: points_mechanical_wear
+    target: {sites: [SOU], asset_types: [point_machine], assets_per_type: 1}
+    start_min: 5
+    duration_min: 45
+    effects:
+      throw_time_s:    {kind: drift, per_min: 0.06}
+      drive_current_a: {kind: drift, per_min: 0.04}
+  - id: wok_signalling_power_dip
+    cause: signalling_power_supply_fault
+    target: {sites: [WOK], asset_types: [track_circuit], assets_per_type: all}
+    start_min: 20
+    duration_min: 8
+    effects:
+      relay_voltage_v: {kind: step, delta: -0.45}
+      feed_current_a:  {kind: step, delta: -0.15}
+  - id: bcu_track_circuit_flicker
+    cause: track_circuit_intermittent
+    target: {sites: [BCU], asset_types: [track_circuit], assets_per_type: 1}
+    start_min: 12
+    duration_min: 20
+    effects:
+      relay_voltage_v: {kind: spike, probability: 0.08, delta: -0.7}
+  - id: clj_traction_sag
+    cause: traction_supply_fault
+    target: {sites: [CLJ], asset_types: [traction_substation], assets_per_type: all}
+    start_min: 32
+    duration_min: 10
+    effects:
+      dc_bus_voltage_v: {kind: step, delta: -130}
+      load_current_a:   {kind: step, delta: 1900}
+  - id: bsk_stuck_sensor
+    cause: sensor_fault
+    target: {sites: [BSK], asset_types: [track_circuit], assets_per_type: 1}
+    start_min: 10
+    duration_min: 30
+    effects:
+      relay_voltage_v: {kind: flatline}
+
+# Short, curated notes the agent is allowed to draw on. In a real deployment this is where
+# retrieval over rule books, asset manuals and fault history plugs in.
+knowledge:
+  - applies_to: [points_slow_throw, points_very_slow_throw, points_high_current]
+    text: >-
+      Rising throw time together with rising drive current on one point machine usually means
+      mechanical resistance: dry or dirty slide chairs, debris, or drifting adjustment. It tends to
+      get worse until the points fail to detect, which stops trains over the junction.
+  - applies_to: [tc_low_voltage, tc_drop_away]
+    text: >-
+      When many track circuits at the same location lose voltage at the same moment, the common
+      factor is usually their shared signalling power supply, not each circuit. One fault, many alarms.
+      A track circuit at drop-away shows the section as occupied and holds signals at danger.
+  - applies_to: [tc_flicker]
+    text: >-
+      A single track circuit whose voltage dips briefly and recovers is typical of an intermittent
+      fault: a loose bond, a failing insulated rail joint, or wet ballast. It can cause brief false
+      occupancies that are hard to catch on site.
+  - applies_to: [traction_voltage_sag, traction_voltage_low, traction_overload]
+    text: >-
+      Low DC bus voltage with high load current at a substation points to traction supply stress or
+      a supply-side fault. Electrical control owns the response; trains may run with reduced performance.
+  - applies_to: [sensor_flatline]
+    text: >-
+      A reading that does not change at all for a full minute is almost never physical. Treat it as a
+      sensor or telemetry fault until proven otherwise, and do not infer asset condition from it.
+  - applies_to: [rail_temp_high]
+    text: >-
+      High rail temperature raises the risk of track buckling on continuously welded rail. Responses
+      follow the local hot-weather plan, typically a watch first and then speed restrictions.
+
+agent:
+  role: >-
+    You assist a rail operations controller monitoring trackside assets on the Bournemouth to
+    Waterloo corridor. You turn groups of sensor alarms into one clear incident card.

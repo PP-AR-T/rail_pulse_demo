@@ -6,3 +6,9 @@ env:
     valueFrom: "api-token"
   - name: LANDING_DIR
     value: "/Volumes/rail_pulse/bronze/landing/rtt/bmh"
+  # Operator console page (pages/operator_console.py). Add a SQL warehouse to the app as a
+  # resource with key "sql-warehouse" (Can use) before deploying this version.
+  - name: WAREHOUSE_ID
+    valueFrom: "sql-warehouse"
+  - name: CATALOG
+    value: "rail_pulse"

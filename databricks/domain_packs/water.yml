@@ -1,0 +1,113 @@
+# Domain pack: water (wastewater network: pumping stations and storm overflows).
+#
+# Same core, different pack. Nothing in accelerator/, the simulator, the pipeline or the
+# agent notebook changes to run this domain: that is the point of the accelerator.
+#
+# ALL DATA PRODUCED FROM THIS PACK IS SYNTHETIC. Sites are fictional. Thresholds are
+# illustrative for a demo and are not a water company's operating limits.
+
+pack: water
+title: Wastewater network pulse (synthetic)
+
+sites:
+  - {id: RVS, name: Riverside pumping station}
+  - {id: HBR, name: Harbour Road pumping station}
+  - {id: MLL, name: Mill Lane pumping station}
+  - {id: QSC, name: Quay Street storm overflow}
+  - {id: CHR, name: Church Road storm overflow}
+
+asset_types:
+  wastewater_pump:
+    label: Wastewater pump
+    id_prefix: PU
+    sites: [RVS, HBR, MLL]
+    per_site: 3
+    measures:
+      motor_current_a:        {unit: A,   period_s: 5,  nominal: 42,  noise: 0.8}
+      discharge_pressure_bar: {unit: bar, period_s: 5,  nominal: 2.4, noise: 0.04}
+  wet_well:
+    label: Wet well level
+    id_prefix: WW
+    sites: [RVS, HBR, MLL]
+    per_site: 1
+    measures:
+      level_m: {unit: m, period_s: 10, nominal: 1.6, noise: 0.03}
+  overflow_chamber:
+    label: Storm overflow chamber (event duration monitor)
+    id_prefix: OC
+    sites: [RVS, QSC, CHR]   # RVS has an emergency overflow; QSC and CHR are network overflows
+    per_site: 1
+    measures:
+      chamber_level_m: {unit: m, period_s: 15, nominal: 0.55, noise: 0.02}
+
+causes:
+  - {id: pump_blockage, label: "Pump ragging or partial blockage"}
+  - {id: storm_overflow_spill, label: "Storm overflow spilling (chamber level above weir)"}
+  - {id: high_inflow, label: "High inflow to the wet well (rainfall or infiltration)"}
+  - {id: sensor_fault, label: "Instrument or telemetry fault, not an asset fault"}
+
+actions:
+  - {id: monitor, label: "Keep monitoring; no intervention yet"}
+  - {id: dispatch_crew, label: "Dispatch a network crew to the site"}
+  - {id: start_pump_deragging, label: "Run the pump de-ragging sequence (operator-initiated)"}
+  - {id: open_spill_record, label: "Open a spill record for regulatory reporting review"}
+  - {id: raise_instrument_fault, label: "Raise an instrument fault ticket; treat readings as unreliable"}
+
+detectors:
+  - {id: pump_current_high, measure: motor_current_a, when: "avg_value > 48", severity: warning,
+     meaning: "Pump motor current above 48 A (healthy around 42 A)"}
+  - {id: pump_pressure_low, measure: discharge_pressure_bar, when: "avg_value < 2.1", severity: warning,
+     meaning: "Pump discharge pressure below 2.1 bar"}
+  - {id: wet_well_high, measure: level_m, when: "max_value > 2.4", severity: warning,
+     meaning: "Wet well level above 2.4 m"}
+  - {id: overflow_spilling, measure: chamber_level_m, when: "max_value > 1.2", severity: critical,
+     meaning: "Overflow chamber level above weir crest (1.2 m): spill in progress"}
+  - {id: sensor_flatline, measure: "*", when: "n >= 4 AND std_value < 0.000001", severity: info,
+     meaning: "Instrument reporting an identical value for a whole minute"}
+
+scenarios:
+  - id: hbr_pump_ragging
+    cause: pump_blockage
+    target: {sites: [HBR], asset_types: [wastewater_pump], assets_per_type: 1}
+    start_min: 8
+    duration_min: 40
+    effects:
+      motor_current_a:        {kind: drift, per_min: 0.45}
+      discharge_pressure_bar: {kind: drift, per_min: -0.025}
+  - id: qsc_storm_spill
+    cause: storm_overflow_spill
+    target: {sites: [QSC], asset_types: [overflow_chamber], assets_per_type: all}
+    start_min: 25
+    duration_min: 15
+    effects:
+      chamber_level_m: {kind: step, delta: 0.9}
+  - id: mll_level_stuck
+    cause: sensor_fault
+    target: {sites: [MLL], asset_types: [wet_well], assets_per_type: all}
+    start_min: 15
+    duration_min: 25
+    effects:
+      level_m: {kind: flatline}
+
+knowledge:
+  - applies_to: [pump_current_high, pump_pressure_low]
+    text: >-
+      Rising motor current with falling discharge pressure on one pump is the classic sign of ragging:
+      wipes and fibrous material wrapping the impeller. Left alone it trips the pump and the wet well rises.
+  - applies_to: [overflow_spilling]
+    text: >-
+      A chamber level above the weir crest means the overflow is spilling to the watercourse. Every spill
+      is recorded by the event duration monitor and reviewed for regulatory reporting.
+  - applies_to: [wet_well_high]
+    text: >-
+      A rising wet well usually means inflow exceeds pumping: heavy rain, infiltration, or a pump not
+      delivering. Check pump health before assuming rainfall.
+  - applies_to: [sensor_flatline]
+    text: >-
+      An instrument value that does not move at all for a full minute is almost never physical. Treat
+      it as an instrument or telemetry fault and do not infer asset condition from it.
+
+agent:
+  role: >-
+    You assist a wastewater network control-room operator. You turn groups of telemetry alarms
+    from pumping stations and storm overflows into one clear incident card.

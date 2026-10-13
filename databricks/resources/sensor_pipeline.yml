@@ -1,0 +1,20 @@
+# Streaming decision pipeline: sensor readings -> 1-minute aggregates -> detectors -> incidents.
+# Domain-agnostic: it loads every pack in domain_packs/, so a new domain is a new YAML file.
+# Triggered (not continuous) to stay inside Free Edition limits; the demo job runs it after
+# each simulator run, and Auto Loader's checkpoint makes every run pick up only new files.
+resources:
+  pipelines:
+    rail_pulse_sensors:
+      name: rail_pulse_sensors
+      catalog: ${var.catalog}
+      schema: ops
+      serverless: true
+      continuous: false
+      configuration:
+        bundle_root: ${workspace.file_path}
+        landing_path: /Volumes/${var.catalog}/bronze/landing/sensors
+        watermark: "2 minutes"
+        incident_gap: "10 minutes"
+      libraries:
+        - file:
+            path: ../pipelines/sensor_streaming.py
